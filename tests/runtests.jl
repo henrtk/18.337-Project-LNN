@@ -2,6 +2,8 @@ using LNNProject
 using Test
 
 @testset "LNNProject.jl" begin
-    # Write your tests here.
-    test_fn(1,2)
+    # Write your unit tests here. This is to ensure that code behaviour is correct
+    # and that it does not change suddenly. If it does change, but this is expected,
+    # change the tests. 
+    @test test_fn(1,2) == 2*1
 end
