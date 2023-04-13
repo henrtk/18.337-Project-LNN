@@ -6,3 +6,4 @@ This template repository contains:
  - GitHub action that will auto-magically render your `paper/paper.md` file into a nice looking PDF and attach it as an artifact to the GitHub action runner ([like this](https://github.com/JacksonBurns/18337-project-template/actions/runs/4494008366))
 
 
+Halla
