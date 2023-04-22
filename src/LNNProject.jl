@@ -1,6 +1,11 @@
 module LNNProject
 
+using LinearAlgebra, DiffEqBase, Zygote, Flux, DiffEqFlux
+
 # Write your package code here.
 include("LNN_core.jl")
 
-end
+export LagrangianNN, NeuralLagrangian
+
+end # module
+

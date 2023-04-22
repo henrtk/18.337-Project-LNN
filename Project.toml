@@ -4,7 +4,12 @@ authors = ["Henrik T. Kaarbø <henrtk@stud.ntnu.no> and Ulrik Unneberg"]
 version = "1.0.0-DEV"
 
 [deps]
+DiffEqBase = "2b5f629d-d688-5b77-993f-72d75c75574e"
+DiffEqFlux = "aae7a2af-3d4f-5e19-a356-7da93b79d9d0"
 FiniteDiff = "6a86dc24-6348-571c-b903-95158fe2bd41"
+Flux = "587475ba-b771-5e3f-ad9e-33799f191a9c"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
 
 [compat]
 julia = "1"
