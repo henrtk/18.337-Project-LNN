@@ -39,7 +39,8 @@ function _lagrangian_forward(re, p, q_qdot)
     ∇²L⁻¹ = pinv(Zygote.hessian(L, q_qdot)[1])
     
     qdotdot = ∇²L⁻¹*(∇_qL - ∇_q∇ₚᵀL * qdot) 
-    return [qdot, qdotdot]
+    
+    return vcat(q_qdot[N+1:end], qdotdot)
 end
 
 (lnn::LagrangianNN)(q_qdot, p = lnn.p) = _lagrangian_forward(lnn.re, p, q_qdot)
@@ -85,7 +86,7 @@ end
 # Define the output of the LNN when called
 function (lnnL::NeuralLagrangian)(q_qdot, p = lnnL.lnn.p)
     function neural_Lagrangian_evolve!(qdot_qdotdot, q_qdot, p, t)
-        qdot_qdotdot .= reshape(lnnL.lnn(q_qdot, p), sizeof(qdot_qdotdot))
+        qdot_qdotdot .= lnnL.lnn(q_qdot, p)
     end
     prob = ODEProblem(neural_Lagrangian_evolve!, q_qdot, lnnL.tspan, p)
     sensitivity = DiffEqFlux.InterpolatingAdjoint(autojacvec = false)
