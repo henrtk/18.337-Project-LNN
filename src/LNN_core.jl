@@ -23,27 +23,28 @@ end
     
 Flux.trainable(lnn::LagrangianNN) = (lnn.p,)
 
-function _lagrangian_forward(re, p, q_qdot)
+function _lagrangian_forward(re, p ,q_qdot)
     N = size(q_qdot, 1)÷2
     qdot = @view q_qdot[N+1:end]
     # Assuming 1D for now, we treat L as a scalar, otherwise we would have to
     # do something integration-like
-    L = x -> sum(re(p)(x))
+    model = re(p)
+    L = x -> sum(model(x))
 
     # There has to be a more efficient way to do this mathematically
-    ∇_q∇_qdotᵀL = Zygote.jacobian(q_qdot-> Zygote.gradient(L,q_qdot)[1][N+1:end], q_qdot)[1][1:N,N+1:end]
+    ∇_q∇_qdotᵀL = Zygote.jacobian(q_qdot-> Zygote.gradient(q_qdot -> L(q_qdot), q_qdot)[1][N+1:end], q_qdot)[1][1:N,N+1:end]
 
     ∇_qL = Zygote.gradient(L, q_qdot)[1][1:N]
     
-    # Pseudo-inverse to avoid singularities
-    ∇²L⁻¹ = pinv(Zygote.hessian(L, q_qdot)[1])
+    # Pseudo-inverse to avoid singularities, also expensive; grows as O(q³)
+    ∇²L⁻¹ = pinv(Zygote.hessian(q_qdot -> L(q_qdot), q_qdot)[1])
     
     qdotdot = ∇²L⁻¹*(∇_qL - ∇_q∇_qdotᵀL * qdot) 
     
     return vcat(q_qdot[N+1:end], qdotdot)
 end
 
-(lnn::LagrangianNN)(q_qdot, p = lnn.p) = _lagrangian_forward(lnn.re, p, q_qdot)
+(lnn::LagrangianNN)(q_qdot, p=lnn.p) = _lagrangian_forward(lnn.re,p, q_qdot)
 
 # Create wrapper for actual LagrangianNN layer
 
@@ -88,8 +89,8 @@ function (lnnL::NeuralLagrangian)(q_qdot, p = lnnL.lnn.p, delta_t = lnnL.tspan[2
     function neural_Lagrangian_evolve!(qdot_qdotdot, q_qdot, p, t)
         qdot_qdotdot .= lnnL.lnn(q_qdot, p)
     end
-    prob = ODEProblem(neural_Lagrangian_evolve!, q_qdot, tspan=(0,delta_t), p)
+    prob = ODEProblem(neural_Lagrangian_evolve!, q_qdot, (0, delta_t), p)
     sensitivity = DiffEqFlux.InterpolatingAdjoint(autojacvec = false)
-    return solve(prob, Tsit5(), lnnL.args...; sensealg = sensitivity, lnnL.kwargs...)
+    solve(prob, Tsit5(), lnnL.args...; sensealg = sensitivity, lnnL.kwargs...)
 end  
 
