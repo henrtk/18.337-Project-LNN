@@ -23,28 +23,33 @@ end
     
 Flux.trainable(lnn::LagrangianNN) = (lnn.p,)
 
-function _lagrangian_forward(re, p ,q_qdot)
+function _lagrangian_forward(re, p , qv)
     N = size(q_qdot, 1)÷2
-    qdot = @view q_qdot[N+1:end]
-    # Assuming 1D for now, we treat L as a scalar, otherwise we would have to
-    # do something integration-like
-    model = re(p)
-    L = x -> sum(model(x))
+    # Check if views work here later
+    q = qv[1:N]
+    v = qv[N+1:end]
+    
+    # Assuming single output for now, we treat L as a scalar, otherwise we would have to
+    # do something integration-like for a lagrangian density
+    function L(q, v, p)
+        sum(re(p)([q;v]))
+    end
 
-    # There has to be a more efficient way to do this mathematically
-    ∇_q∇_qdotᵀL = Zygote.jacobian(q_qdot-> Zygote.gradient(q_qdot -> L(q_qdot), q_qdot)[1][N+1:end], q_qdot)[1][1:N,N+1:end]
+    L_q  = (q, v, p) -> Zygote.gradient( x -> L(x, v, p), q)[1]
+    L_v  = (q, v, p) -> Zygote.gradient( x -> L(q, x, p), v)[1]
+    L_vq = (q, v, p) -> Zygote.jacobian(x -> L_v(x, v, p), q)[1]
+    ∇ᵥ²L = (q, v, p) -> Zygote.hessian( x -> L(q, x, p), v)
 
-    ∇_qL = Zygote.gradient(L, q_qdot)[1][1:N]
-    
-    # Pseudo-inverse to avoid singularities, also expensive; grows as O(q³)
-    ∇²L⁻¹ = pinv(Zygote.hessian(q_qdot -> L(q_qdot), q_qdot)[1])
-    
-    qdotdot = ∇²L⁻¹*(∇_qL - ∇_q∇_qdotᵀL * qdot) 
-    
-    return vcat(q_qdot[N+1:end], qdotdot)
+    # pinv for stability and non-singularity
+    ∇ᵥ²L⁻¹ = (q, v, ps) -> pinv(∇ᵥ²L(q, v, ps))
+    # May want to solve linear system instead of inverting, but not possible if pinv.
+    # to avoid singularities we may instead calculate for ∇²L-epsilon*I
+    #eI = 2*eps()*I 
+    v̇ = ∇ᵥ²L⁻¹(q,v,p)*(L_q(q,v,p) - L_vq(q,v,ps) * v) 
+    return vcat(v, v̇)
 end
 
-(lnn::LagrangianNN)(q_qdot, p=lnn.p) = _lagrangian_forward(lnn.re,p, q_qdot)
+(lnn::LagrangianNN)(qv, p=lnn.p) = _lagrangian_forward(lnn.re,p, qv)
 
 # Create wrapper for actual LagrangianNN layer
 
@@ -85,12 +90,11 @@ struct NeuralLagrangian{M,P,RE,T,A,K} <: NeuralDELayer
 end
 
 # Define the output of the LNN when called
-function (lnnL::NeuralLagrangian)(q_qdot, p = lnnL.lnn.p, delta_t = lnnL.tspan[2])
-    function neural_Lagrangian_evolve!(qdot_qdotdot, q_qdot, p, t)
-        qdot_qdotdot .= lnnL.lnn(q_qdot, p)
+function (lnnL::NeuralLagrangian)(qv, p = lnnL.lnn.p, T = lnnL.tspan[2])
+    function neural_Lagrangian_evolve!(vv̇, qv, p, t)
+        v_vdot .= lnnL.lnn(qv, p)
     end
-    prob = ODEProblem(neural_Lagrangian_evolve!, q_qdot, (0, delta_t), p)
+    prob = ODEProblem(neural_Lagrangian_evolve!, vv̇, (0, T), p)
     sensitivity = DiffEqFlux.InterpolatingAdjoint(autojacvec = false)
     solve(prob, Tsit5(), lnnL.args...; sensealg = sensitivity, lnnL.kwargs...)
 end  
-

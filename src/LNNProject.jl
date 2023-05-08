@@ -1,7 +1,7 @@
 module LNNProject
 
 using LinearAlgebra, DiffEqBase, Zygote, Flux, DiffEqFlux,
-    DifferentialEquations, DiffEqSensitivity
+    DifferentialEquations, ReverseDiff, ForwardDiff
 
 # Write your package code here.
 include("LNN_core.jl")
@@ -9,4 +9,3 @@ include("LNN_core.jl")
 export LagrangianNN, NeuralLagrangian
 
 end # module
-
