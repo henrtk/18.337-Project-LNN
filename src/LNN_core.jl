@@ -35,8 +35,8 @@ function _lagrangian_forward(re, p , qv)
         sum(re(p)([q;v]))
     end
 
-    L_q  = (q, v, p) -> Zygote.gradient( x -> L(x, v, p), q)[1]
-    L_v  = (q, v, p) -> Zygote.gradient( x -> L(q, x, p), v)[1]
+    L_q  = (q, v, p) -> Zygote.gradient(x -> L(x, v, p), q)[1]
+    L_v  = (q, v, p) -> Zygote.gradient(x -> L(q, x, p), v)[1]
     L_vq = (q, v, p) -> Zygote.jacobian(x -> L_v(x, v, p), q)[1]
     ∇ᵥ²L = (q, v, p) -> Zygote.hessian( x -> L(q, x, p), v)
 
@@ -45,7 +45,7 @@ function _lagrangian_forward(re, p , qv)
     # May want to solve linear system instead of inverting, but not possible if pinv.
     # to avoid singularities we may instead calculate for ∇²L-epsilon*I
     #eI = 2*eps()*I 
-    v̇ = ∇ᵥ²L⁻¹(q,v,p)*(L_q(q,v,p) - L_vq(q,v,ps) * v) 
+    v̇ = ∇ᵥ²L⁻¹(q,v,p)*(L_q(q,v,p) - L_vq(q,v,p) * v) 
     return vcat(v, v̇)
 end
 
