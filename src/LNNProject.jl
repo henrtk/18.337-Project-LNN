@@ -1,7 +1,7 @@
 module LNNProject
 
 using LinearAlgebra, DiffEqBase, Zygote, Flux, DiffEqFlux,
-    DifferentialEquations, ReverseDiff, ForwardDiff
+    DifferentialEquations, ForwardDiff
 
 # Write your package code here.
 include("LNN_core.jl")

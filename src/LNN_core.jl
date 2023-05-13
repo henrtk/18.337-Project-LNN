@@ -16,6 +16,7 @@ struct LagrangianNN{M, R, P}
     p::P 
     function LagrangianNN(model; p = nothing)
         _p, re = Flux.destructure(model)
+        # if p is not set, set it to be the ps of the model
         p = p === nothing ? _p : p
         return new{typeof(model), typeof(re), typeof(p)}(model, re, p)
     end
@@ -23,7 +24,7 @@ end
 
 #Flux.trainable(lnn::LagrangianNN) = (lnn.p,)
 
-function _lagrangian_forward(re, p , qv)
+function _lagrangian_forward(qv, p , re)
     N = size(qv, 1)÷2
     # Check if views work here later
     q = @view qv[1:N]
@@ -40,11 +41,11 @@ function _lagrangian_forward(re, p , qv)
     L_vq = (q, v) -> ForwardDiff.jacobian(x -> L_v(x, v), q)[1]
     ∇ᵥ²L = (q, v) -> Zygote.hessian(x -> L(q, x), v)
 
-    # pinv for stability and non-singularity
+    # pinv for stability and singularity avoidance (pinv does not seem to explode close to singularities)
     ∇ᵥ²L⁻¹ = (q, v) -> pinv(∇ᵥ²L(q, v))
-    # May want to solve linear system instead of inverting, but not possible if pinv.
-    # to avoid singularities we may instead calculate for ∇²L-epsilon*I
-    #eI = 2*eps()*I 
+    # May want to solve linear system instead of inverting, but not possible if relying on pinv.
+    # to avoid singularities we may instead calculate for ∇²L-epsilon*I with a linear system
+    # eI = 2*eps()*I 
     v̇ = ∇ᵥ²L⁻¹(q,v)*(L_q(q,v) - L_vq(q,v) * v) 
     return vcat(v, v̇)
 end
@@ -54,7 +55,8 @@ Generates the LNN's prediction for the right hand side of the ODE.
 Assumes the form of the input vector to be [q ; v] where holds the position data
 and v holds the respective speed data where d/dt q_i =: v_i.
 """
-(lnn::LagrangianNN)(qv, p=lnn.p) = _lagrangian_forward(lnn.re, p, qv)
+(lnn::LagrangianNN)(qv, p=lnn.p) = _lagrangian_forward(qv, p, lnn.re)
+
 
 # Create wrapper for actual LagrangianNN layer
 
@@ -66,22 +68,31 @@ the system is to be evolved, and any additional arguments to be passed to the OD
 the user through the constructor.
 
 When called:
-    (NL::NeuralLagrangian)(qv, forward_method = Euler(), p = NL.p, T = NL.tspan[2])
+    
+(NL::NeuralLagrangian)(qv, forward_method = Euler(), p = NL.p, T = NL.tspan[2])
     Generates the LNN's prediction of the system's state at a given time T given the initial
     state qv and the parameters of the neural network p.
 
     variables:
-        qv: the initial state of the system, assumed to be on the form [q;v], where q holds
-            the position data and v holds the respective speed data where d/dt q_i =: v_i.
+        qv: the initial state of the system, assumed to be on 
+            the form [q;v], where q holds he position data and
+            v holds the respective speed data where 
+            d/dt q_i =: v_i.
         forward_method: the method used to evolve the ODE 
-            (default Euler; RHS evaluations are expensive and higher order methods fail unexpectedly).
-            Beware that the adjoint method is not yet implemented for NeuralLagrangian and that adaptive step size methods may yield excessive runtimes
-            when untrained as the Neural Net often seems to yield an unstable ODE when untrained.
+            (default Euler; RHS evaluations are expensive and 
+            higher order methods fail unexpectedly). 
+            Beware that the adjoint method is not yet implemented 
+            for NeuralLagrangian and that adaptive step size 
+            methods may yield excessive runtimes when untrained as 
+            the Neural Net often seems to yield an unstable ODE
+            when untrained. The user may try VCAB3() or 
+            AutoTsit5(Rosenbrock23()) if stiffness is an issue
         p: the parameters of the neural network
         T: the time at which to predict the state of the system
-
+            
     returns:
-        solve object containing the state of the system at time T and the time steps taken to get there
+        solve object containing the state of the system at time T
+        and the time steps taken to get there
 """
 struct NeuralLagrangian{M,P,RE,T,A,K} <: NeuralDELayer
     lnn::LagrangianNN
@@ -91,7 +102,6 @@ struct NeuralLagrangian{M,P,RE,T,A,K} <: NeuralDELayer
     args::A
     kwargs::K
 
-    
     """Construct a NeuralLagrangian layer from a normal Neural Network assumed to be compatible with Flux.
 
     variables: 
@@ -135,16 +145,22 @@ Generates the LNN's prediction of the system's state at a given time T given the
 state qv and the parameters of the neural network p. 
 
 Note: the derivative of the NeuralLagrangian was supposed to be automatically defined through
-SciMLSensitivity, but this fails as the AD-packages it uses do not seem to support triple nesting of AD,
-which is required for the LNN as formulated by Cranmer et al (2019). Finite differences can be used instead.
+SciMLSensitivity's automatic sensitivity analysis, but this fails as the AD-packages it uses do
+not seem to support triple nesting of AD, which is required for the LNN as formulated by Cranmer et al (2019).
+Finite differences can be used instead.
 
 variables:
-    qv: the initial state of the system, assumed to be on the form [q;v], where q holds
-        the position data and v holds the respective speed data where d/dt q_i =: v_i.
+    qv: the initial state of the system, assumed to be on 
+        the form [q;v], where q holds he position data and
+        v holds the respective speed data where d/dt q_i =: v_i.
     forward_method: the method used to evolve the ODE 
-        (default Euler; RHS evaluations are expensive and higher order methods fail unexpectedly).
-        Beware that the adjoint method is not yet implemented for NeuralLagrangian and that adaptive step size methods may yield excessive runtimes
-        when untrained as the Neural Net often seems to yield an unstable ODE when untrained.
+        (default Euler; RHS evaluations are expensive and 
+        higher order methods fail unexpectedly). 
+        Beware that the adjoint method is not yet implemented for
+        NeuralLagrangian and that adaptive step size methods may 
+        yield excessive runtimes when untrained as the Neural Net 
+        often seems to yield an unstable ODE when untrained.
+        The user may try VCAB3() or AutoTsit5(stiffalg = Rosenbrock23)
     p: the parameters of the neural network
     T: the time at which to predict the state of the system
 
@@ -156,7 +172,6 @@ function (NL::NeuralLagrangian)(qv, forward_method = Euler(), p = NL.lnn.p, T = 
         vv̇ .= NL.lnn(qv, p)
     end
     prob = ODEProblem(neural_Lagrangian_evolve!, qv, (0, T), p)
-    NL.kwargs[:adaptive] = adaptive
-    #sensitivity = DiffEqFlux.InterpolatingAdjoint(autojacvec = false)
-    solve(prob, forward_method, NL.args...; NL.kwargs...)
+    # This does not work: sensitivity = DiffEqFlux.InterpolatingAdjoint(autojacvec = false)
+    solve(prob, forward_method, NL.args..., adaptive = adaptive; NL.kwargs...)
 end  
