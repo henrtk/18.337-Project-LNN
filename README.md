@@ -1,8 +1,17 @@
-# 18.337 Course Project 
+# 18.337 Course Project -- Lagrangian Neural Networks
 
-This template repository contains:
- - basic directory structure
- - blank journal-styled paper to use for your proposal and eventual paper
- - GitHub action that will auto-magically render your `paper/paper.md` file into a nice looking PDF and attach it as an artifact to the GitHub action runner ([like this](https://github.com/JacksonBurns/18337-project-template/actions/runs/4494008366))
-
-
+The code used to implement a version of Lagrangian Neural Networks in Julia is to be found here. 
+To install and use
+```bash
+git clone https://github.com/henrtk/18.337-Project-Temp-name-
+```
+then 
+```bash
+cd \18.337-Project-Temp-name-\
+julia
+```
+```julia
+] 
+activate .
+```
+to activate the environment. To be able to run the examples in the Jupyter Notebooks, the kernel used must be the one from this environment.
