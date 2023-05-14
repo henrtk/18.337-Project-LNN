@@ -1,9 +1,5 @@
-# For safety (??)
-abstract type NeuralDELayer <: Function end
-Flux.trainable(m::NeuralDELayer) = (m.p,)
 
 """
-Docs (to come)
 A Lagrangian neural network is a neural network that learns the underlying
 Lagrangian of a system. The Lagrangian is a function of the system's state and its
 time derivative, L(q, qdot), and thus needs 2n inputs, where n is the dimension of
@@ -22,8 +18,9 @@ struct LagrangianNN{M, R, P}
     end
 end
 
-#Flux.trainable(lnn::LagrangianNN) = (lnn.p,)
-
+"""
+Defines the Right hand side of the ODE that is solved to generate the system's dynamics
+"""
 function _lagrangian_forward(qv, p , re)
     N = size(qv, 1)÷2
     # Check if views work here later
@@ -31,7 +28,7 @@ function _lagrangian_forward(qv, p , re)
     v = @view qv[N+1:end]
     model = re(p)
     # Assuming single output for now, we treat L as a scalar, otherwise we would have to
-    # do something integration-like for a lagrangian density
+    # do something integration-like for a generalized lagrangian density with multiple outputs
     function L(q, v)
         sum(model([q;v]))
     end
@@ -94,7 +91,7 @@ When called:
         solve object containing the state of the system at time T
         and the time steps taken to get there
 """
-struct NeuralLagrangian{M,P,RE,T,A,K} <: NeuralDELayer
+struct NeuralLagrangian{M,P,RE,T,A,K}
     lnn::LagrangianNN
     p::P
     re::RE
@@ -167,7 +164,7 @@ variables:
 returns:
     solve object containing the state of the system at time T and the time steps taken to get there
 """
-function (NL::NeuralLagrangian)(qv, forward_method = Euler(), p = NL.lnn.p, T = NL.tspan[2], adaptive = false)
+function (NL::NeuralLagrangian)(qv, forward_method = Euler(), p = NL.lnn.p, T = NL.tspan[2], adaptive = false, kwargs...)
     function neural_Lagrangian_evolve!(vv̇, qv, p, t)
         vv̇ .= NL.lnn(qv, p)
     end
